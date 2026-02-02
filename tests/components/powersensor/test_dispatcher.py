@@ -9,6 +9,7 @@ from unittest.mock import Mock, call
 import pytest
 
 from homeassistant.components.powersensor.const import (
+    CFG_ROLES,
     CREATE_PLUG_SIGNAL,
     CREATE_SENSOR_SIGNAL,
     DATA_UPDATE_SIGNAL_FMT_MAC_EVENT,
@@ -52,6 +53,7 @@ def monkey_patched_dispatcher(hass: HomeAssistant, monkeypatch: pytest.MonkeyPat
     )
     vhh = powersensor_dispatcher_module.VirtualHousehold(False)
     entry = Mock()
+    entry.data = {CFG_ROLES: {}}
     dispatcher = powersensor_dispatcher_module.PowersensorMessageDispatcher(
         hass, entry, vhh, debounce_timeout=2
     )
@@ -227,7 +229,7 @@ async def test_dispatcher_handle_plug_exception(
     powersensor_dispatcher_module = importlib.import_module(
         "homeassistant.components.powersensor.PowersensorMessageDispatcher"
     )
-    await powersensor_dispatcher_module.handle_exception(
+    await powersensor_dispatcher_module._handle_exception(
         "exception", NotImplementedError
     )
 
@@ -325,13 +327,58 @@ async def test_dispatcher_handle_relaying_for(
     await dispatcher.handle_relaying_for(
         "test-event", {"mac": MAC, "device_type": "sensor", "role": "house-net"}
     )
-    assert dispatcher.dispatch_send_reference.call_count == 2
-    dispatcher.dispatch_send_reference.call_args_list[0] = call(
+    assert dispatcher.dispatch_send_reference.call_count == 1
+    assert dispatcher.dispatch_send_reference.call_args_list[0] == call(
         dispatcher._hass, CREATE_SENSOR_SIGNAL, MAC, "house-net"
     )
-    dispatcher.dispatch_send_reference.call_args_list[1] = call(
-        dispatcher._hass, ROLE_UPDATE_SIGNAL, MAC, "house-net"
-    )
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_handle_relaying_for_none_role(
+    monkeypatch: pytest.MonkeyPatch, monkey_patched_dispatcher
+) -> None:
+    """Test handling of relay events by the dispatcher.
+
+    This test verifies that:
+    - A sensor with a missing role is registered without a role
+    """
+    dispatcher = monkey_patched_dispatcher
+    await dispatcher.handle_relaying_for("test-event", {'mac': MAC, 'device_type': 'sensor', 'role': None})
+    assert dispatcher.dispatch_send_reference.call_count == 1
+    assert dispatcher.dispatch_send_reference.call_args_list[0] == call(dispatcher._hass, CREATE_SENSOR_SIGNAL, MAC, None)
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_handle_relaying_for_unknown_role(
+    monkeypatch: pytest.MonkeyPatch, monkey_patched_dispatcher
+) -> None:
+    """Test handling of relay events by the dispatcher.
+
+    This test verifies that:
+    - A sensor with unknown role is registered without a role
+    """
+    dispatcher = monkey_patched_dispatcher
+    await dispatcher.handle_relaying_for("test-event", {'mac': MAC, 'device_type': 'sensor', 'role': 'unknown'})
+    assert dispatcher.dispatch_send_reference.call_count == 1
+    assert dispatcher.dispatch_send_reference.call_args_list[0] == call(dispatcher._hass, CREATE_SENSOR_SIGNAL, MAC, None)
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_handle_relaying_for_unknown_role_with_stored_role(
+    monkeypatch: pytest.MonkeyPatch, monkey_patched_dispatcher
+) -> None:
+    """Test handling of relay events by the dispatcher.
+
+    This test verifies that:
+    - A sensor with unknown role for which we have a previously configured
+      role gets said configured role applied after creation
+    """
+    dispatcher = monkey_patched_dispatcher
+    dispatcher._entry.data[CFG_ROLES][MAC] = 'house-net'
+    await dispatcher.handle_relaying_for("test-event", {'mac': MAC, 'device_type': 'sensor', 'role': 'unknown'})
+    assert dispatcher.dispatch_send_reference.call_count == 2
+    assert dispatcher.dispatch_send_reference.call_args_list[0] == call(dispatcher._hass, CREATE_SENSOR_SIGNAL, MAC, None)
+    assert dispatcher.dispatch_send_reference.call_args_list[1] == call(dispatcher._hass, ROLE_UPDATE_SIGNAL, MAC, 'house-net')
 
 
 @pytest.mark.asyncio
@@ -349,16 +396,16 @@ async def test_dispatcher_handle_message(
     message = {"mac": MAC, "device_type": "sensor", "role": role}
     await dispatcher.handle_message(event, message)
     assert dispatcher.dispatch_send_reference.call_count == 3
-    dispatcher.dispatch_send_reference.call_args_list[0] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[0] == call(
         dispatcher._hass, ROLE_UPDATE_SIGNAL, MAC, role
     )
-    dispatcher.dispatch_send_reference.call_args_list[1] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[1] == call(
         dispatcher._hass,
         DATA_UPDATE_SIGNAL_FMT_MAC_EVENT % (MAC, event),
         event,
         message,
     )
-    dispatcher.dispatch_send_reference.call_args_list[2] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[2] == call(
         dispatcher._hass,
         DATA_UPDATE_SIGNAL_FMT_MAC_EVENT % (MAC, "role"),
         "role",
@@ -367,16 +414,16 @@ async def test_dispatcher_handle_message(
     event = "summation_energy"
     await dispatcher.handle_message(event, message)
     assert dispatcher.dispatch_send_reference.call_count == 6
-    dispatcher.dispatch_send_reference.call_args_list[3] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[3] == call(
         dispatcher._hass, ROLE_UPDATE_SIGNAL, MAC, role
     )
-    dispatcher.dispatch_send_reference.call_args_list[4] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[4] == call(
         dispatcher._hass,
         DATA_UPDATE_SIGNAL_FMT_MAC_EVENT % (MAC, event),
         event,
         message,
     )
-    dispatcher.dispatch_send_reference.call_args_list[5] = call(
+    assert dispatcher.dispatch_send_reference.call_args_list[5] == call(
         dispatcher._hass,
         DATA_UPDATE_SIGNAL_FMT_MAC_EVENT % (MAC, "role"),
         "role",

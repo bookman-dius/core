@@ -9,7 +9,7 @@ import datetime
 import logging
 from typing import Any
 
-from powersensor_local import PlugApi, VirtualHousehold
+from powersensor_local import PlugApi, VirtualHousehold # type: ignore[import-untyped]
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -35,11 +35,17 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+UNKNOWN = "unknown"
 
 
-async def handle_exception(event: str, exc: BaseException):
+async def _handle_exception(event: str, exc: BaseException):
     """Log errors when PlugApi throws an exception."""
     _LOGGER.error("On event %s Plug connection reported exception: %s", event, exc)
+
+
+def _filter_unknown(role: str):
+    """Filters out roles matching "unknown" by returning None instead."""
+    return None if role == UNKNOWN else role
 
 
 class PowersensorMessageDispatcher:
@@ -175,6 +181,15 @@ class PowersensorMessageDispatcher:
         finally:
             self._monitor_add_plug_queue = None
 
+    def _get_role_info(self, message):
+        """Retrieve the effective role and persisted role for this message."""
+        # Filter in case older version stuck an "unknown" in there
+        persisted_role = _filter_unknown(
+            self._entry.data.get(CFG_ROLES, {}).get(message['mac'], None))
+        # The sensor *does* send "unknown", not null/None, so filter it
+        role = _filter_unknown(message.get('role', None))
+        return role, persisted_role
+
     async def stop_processing_plug_queue(self):
         """Stop the background task."""
         self._stop_task = True
@@ -218,7 +233,7 @@ class PowersensorMessageDispatcher:
         for ev in known_evs:
             api.subscribe(ev, self.handle_message)
         api.subscribe("now_relaying_for", self.handle_relaying_for)
-        api.subscribe("exception", handle_exception)
+        api.subscribe("exception", _handle_exception)
         api.connect()
 
     async def cancel_any_pending_removal(self, mac, source):
@@ -240,18 +255,18 @@ class PowersensorMessageDispatcher:
             )
             return
 
-        persisted_role = self._entry.data.get(CFG_ROLES, {}).get(mac, None)
-        role = message.get("role")
+        role, persisted_role = self._get_role_info(message)
         _LOGGER.debug("Relayed sensor %s with role %s found", mac, role)
 
         if mac not in self.sensors:
             _LOGGER.debug("Reporting new sensor %s with role %s", mac, role)
             self.on_start_sensor_queue[mac] = role
             async_dispatcher_send(self._hass, CREATE_SENSOR_SIGNAL, mac, role)
-        if role != persisted_role:
-            _LOGGER.debug(
-                "Restoring role for %s from %s to %s", mac, role, persisted_role
-            )
+
+        # We only apply a known persisted role, so we don't clobber a sensor's
+        # actual knowledge.
+        if persisted_role is not None and role != persisted_role:
+            _LOGGER.debug("Restoring role for %s from %s to %s", mac, role, persisted_role)
             async_dispatcher_send(self._hass, ROLE_UPDATE_SIGNAL, mac, persisted_role)
 
     async def handle_message(self, event: str, message: dict):
@@ -261,11 +276,15 @@ class PowersensorMessageDispatcher:
         flowing from a device but zeroconf scheduled removal and signaling for creation of new Homeassistant entities.
         """
         mac = message["mac"]
-        persisted_role = self._entry.data.get(CFG_ROLES, {}).get(mac, None)
-        role = message.get("role", persisted_role)
-        message["role"] = role
+        role, persisted_role = self._get_role_info(message)
 
-        if role != persisted_role:
+        # Apply persisted role information if necessary
+        message['role'] = persisted_role if role is None else role
+
+        # Uknown roles from the sensor should not be allowed to overwrite
+        # any persisted roles
+        if role is not None and role != persisted_role:
+            self.sensors[mac] = role
             async_dispatcher_send(self._hass, ROLE_UPDATE_SIGNAL, mac, role)
 
         await self.cancel_any_pending_removal(mac, "new message received from plug")
