@@ -79,7 +79,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.POWER_HOME_USE: EntityConfig(
             "Power - Home use",
             SensorDeviceClass.POWER,
-            None,
+            SensorStateClass.MEASUREMENT,
             UnitOfPower.WATT,
             fmt_int,
             0,
@@ -88,7 +88,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.POWER_FROM_GRID: EntityConfig(
             "Power - From grid",
             SensorDeviceClass.POWER,
-            None,
+            SensorStateClass.MEASUREMENT,
             UnitOfPower.WATT,
             fmt_int,
             0,
@@ -97,7 +97,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.POWER_TO_GRID: EntityConfig(
             "Power - To grid",
             SensorDeviceClass.POWER,
-            None,
+            SensorStateClass.MEASUREMENT,
             UnitOfPower.WATT,
             fmt_int,
             0,
@@ -106,7 +106,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.POWER_SOLAR_GENERATION: EntityConfig(
             "Power - Solar generation",
             SensorDeviceClass.POWER,
-            None,
+            SensorStateClass.MEASUREMENT,
             UnitOfPower.WATT,
             fmt_int,
             0,
@@ -115,7 +115,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.ENERGY_HOME_USE: EntityConfig(
             "Energy - Home usage",
             SensorDeviceClass.ENERGY,
-            SensorStateClass.TOTAL,
+            SensorStateClass.TOTAL_INCREASING,
             UnitOfEnergy.KILO_WATT_HOUR,
             fmt_ws_to_kwh,
             3,
@@ -124,7 +124,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.ENERGY_FROM_GRID: EntityConfig(
             "Energy - From grid",
             SensorDeviceClass.ENERGY,
-            SensorStateClass.TOTAL,
+            SensorStateClass.TOTAL_INCREASING,
             UnitOfEnergy.KILO_WATT_HOUR,
             fmt_ws_to_kwh,
             3,
@@ -133,7 +133,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.ENERGY_TO_GRID: EntityConfig(
             "Energy - To grid",
             SensorDeviceClass.ENERGY,
-            SensorStateClass.TOTAL,
+            SensorStateClass.TOTAL_INCREASING,
             UnitOfEnergy.KILO_WATT_HOUR,
             fmt_ws_to_kwh,
             3,
@@ -142,7 +142,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         HouseholdMeasurements.ENERGY_SOLAR_GENERATION: EntityConfig(
             "Energy - Solar generation",
             SensorDeviceClass.ENERGY,
-            SensorStateClass.TOTAL,
+            SensorStateClass.TOTAL_INCREASING,
             UnitOfEnergy.KILO_WATT_HOUR,
             fmt_ws_to_kwh,
             3,
@@ -192,9 +192,6 @@ class PowersensorHouseholdEntity(SensorEntity):
             key = "summation_joules"
             if key in msg:
                 val = msg[key]
-            key = "summation_resettime_utc"
-            if key in msg:
-                self._attr_last_reset = datetime.fromtimestamp(msg[key])
         if val is not None:
             self._attr_native_value = self._config.formatter(val)
             self.async_write_ha_state()

@@ -24,6 +24,7 @@ _config: dict[SensorMeasurements, dict] = {
     SensorMeasurements.Battery: {
         "name": "Battery Level",
         "device_class": SensorDeviceClass.BATTERY,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": PERCENTAGE,
         "precision": 0,
         "event": "battery_level",
@@ -35,6 +36,7 @@ _config: dict[SensorMeasurements, dict] = {
     SensorMeasurements.WATTS: {
         "name": "Power",
         "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "precision": 1,
         "event": "average_power",
@@ -59,6 +61,7 @@ _config: dict[SensorMeasurements, dict] = {
     SensorMeasurements.RSSI: {
         "name": "Signal strength (Bluetooth)",
         "device_class": SensorDeviceClass.SIGNAL_STRENGTH,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": SIGNAL_STRENGTH_DECIBELS,
         "precision": 1,
         "category": EntityCategory.DIAGNOSTIC,

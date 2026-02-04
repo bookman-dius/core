@@ -24,6 +24,7 @@ _config: dict[PlugMeasurements, dict] = {
     PlugMeasurements.WATTS: {
         "name": "Power",
         "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "precision": 1,
         "event": "average_power",
@@ -32,6 +33,7 @@ _config: dict[PlugMeasurements, dict] = {
     PlugMeasurements.VOLTAGE: {
         "name": "Volts",
         "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricPotential.VOLT,
         "precision": 2,
         "event": "average_power_components",
@@ -41,6 +43,7 @@ _config: dict[PlugMeasurements, dict] = {
     PlugMeasurements.APPARENT_CURRENT: {
         "name": "Apparent Current",
         "device_class": SensorDeviceClass.CURRENT,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricCurrent.AMPERE,
         "precision": 2,
         "event": "average_power_components",
@@ -50,6 +53,7 @@ _config: dict[PlugMeasurements, dict] = {
     PlugMeasurements.ACTIVE_CURRENT: {
         "name": "Active Current",
         "device_class": SensorDeviceClass.CURRENT,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricCurrent.AMPERE,
         "precision": 2,
         "event": "average_power_components",
@@ -59,6 +63,7 @@ _config: dict[PlugMeasurements, dict] = {
     PlugMeasurements.REACTIVE_CURRENT: {
         "name": "Reactive Current",
         "device_class": SensorDeviceClass.CURRENT,
+        "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricCurrent.AMPERE,
         "precision": 2,
         "event": "average_power_components",

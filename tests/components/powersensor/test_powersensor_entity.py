@@ -177,7 +177,6 @@ async def test_powersensor_virtual_household(
     await energy_from_grid._on_event(
         "test-event", {"summation_resettime_utc": 1762345678}
     )
-    assert energy_from_grid.last_reset == datetime.datetime.fromtimestamp(1762345678)
 
     # does this error?
     await power_from_grid_entity.async_will_remove_from_hass()
