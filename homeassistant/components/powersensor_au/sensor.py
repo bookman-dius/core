@@ -69,9 +69,6 @@ from .powersensor_message_dispatcher import PowersensorMessageDispatcher
 _LOGGER = logging.getLogger(__name__)
 
 
-# MARK: - Conversion helpers
-
-
 def _volts_to_battery_pct(volts: float) -> float:
     """Convert a battery voltage reading to a percentage (3.3 V = 0 %, 4.15 V = 100 %)."""
     return max(min(100.0 * (volts - 3.3) / 0.85, 100), 0)
@@ -80,9 +77,6 @@ def _volts_to_battery_pct(volts: float) -> float:
 def _joules_to_kwh(joules: float) -> float:
     """Convert watt-seconds (joules) to kilowatt-hours."""
     return joules / 3_600_000.0
-
-
-# MARK: - Entity descriptions
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -117,8 +111,6 @@ class PowersensorVirtualHouseholdSensorEntityDescription(SensorEntityDescription
     message_key: str
     formatter: Callable[[float], int | float] = field(default=int)
 
-
-# MARK: - Module-level description tuples
 
 SENSOR_DESCRIPTIONS: tuple[PowersensorSensorEntityDescription, ...] = (
     PowersensorSensorEntityDescription(
@@ -383,9 +375,6 @@ PRODUCTION_DESCRIPTIONS: tuple[
 )
 
 
-# MARK: - Platform setup
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: PowersensorConfigEntry,
@@ -557,9 +546,6 @@ async def async_setup_entry(
     update_virtual_household_entities()
 
 
-# MARK: - Base entity
-
-
 class PowersensorEntity(SensorEntity):
     """Base class for all Powersensor sensor entities."""
 
@@ -662,9 +648,6 @@ class PowersensorEntity(SensorEntity):
         self.async_write_ha_state()
 
 
-# MARK: - Electricity / water sensor entity
-
-
 class PowersensorSensorEntity(PowersensorEntity):
     """Entity representing a single measurement from a Powersensor electricity/water sensor."""
 
@@ -733,9 +716,6 @@ class PowersensorSensorEntity(PowersensorEntity):
         )
 
 
-# MARK: - Smart plug entity
-
-
 class PowersensorPlugEntity(PowersensorEntity):
     """Entity representing a single measurement from a Powersensor smart plug."""
 
@@ -750,9 +730,6 @@ class PowersensorPlugEntity(PowersensorEntity):
             translation_key="plug",
             translation_placeholders={"id": self._mac},
         )
-
-
-# MARK: - Virtual Household entity
 
 
 class PowersensorHouseholdEntity(SensorEntity):

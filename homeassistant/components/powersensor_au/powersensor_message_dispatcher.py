@@ -104,10 +104,6 @@ class PowersensorMessageDispatcher:
         self.plugs: set[str] = set()
         self.sensors: dict[str, str | None] = {}
 
-    # ------------------------------------------------------------------
-    # PowersensorZeroconfDevices unified event callback
-    # ------------------------------------------------------------------
-
     async def on_device_event(self, event: dict[str, Any]) -> None:
         """Handle all events from the PowersensorZeroconfDevices unified stream.
 
@@ -294,10 +290,6 @@ class PowersensorMessageDispatcher:
             "role",
             {"role": effective_role},
         )
-
-    # ------------------------------------------------------------------
-    # Teardown
-    # ------------------------------------------------------------------
 
     async def disconnect(self) -> None:
         """Clean up device subscriptions."""
