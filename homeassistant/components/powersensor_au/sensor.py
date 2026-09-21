@@ -543,6 +543,15 @@ async def async_setup_entry(
         )
     )
 
+    # Discovery starts before this platform is forwarded, so devices found in
+    # between are only recorded in the dispatcher — their CREATE signals had no
+    # listener.  Seed them now.  There is no await between connecting the
+    # listeners above and this loop, so a device is seen by exactly one path.
+    for plug_mac in dispatcher.plugs:
+        handle_discovered_plug(plug_mac)
+    for sensor_mac, sensor_role in dispatcher.sensors.items():
+        handle_discovered_sensor(sensor_mac, sensor_role)
+
     update_virtual_household_entities()
 
 

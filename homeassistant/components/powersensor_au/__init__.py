@@ -37,19 +37,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: PowersensorConfigEntry) 
         devices=devices,
     )
 
-    # Register platform signal listeners before starting discovery so that
-    # device_found events fired during devices.start() land on ready listeners.
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Start the mDNS service browser.  Unlike the legacy UDP scan, start() is
-    # non-blocking — it registers a ServiceBrowser and returns immediately.
-    # Plugs already on the network will fire add_service callbacks shortly
-    # after; there is no scan_complete event to wait for.
     try:
         await devices.start(dispatcher.on_device_event)
     except (OSError, RuntimeError) as err:
         await devices.stop()
         raise ConfigEntryNotReady(f"Failed to start device discovery: {err}") from err
+
+    # Platforms are forwarded only after discovery has started so that a
+    # ConfigEntryNotReady above cannot leave a stale platform registered.
+    # Anything discovered before sensor.py connects its listeners is seeded
+    # from dispatcher.plugs / dispatcher.sensors when it loads.
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

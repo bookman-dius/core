@@ -19,12 +19,14 @@ Discovery lifecycle
 devices.start() registers an mDNS ServiceBrowser and returns immediately; it
 does not block waiting for plugs to respond.  Plugs already present on the
 network fire add_service callbacks shortly after start() returns.  The platform
-(sensor.py) is set up before start() is called, so its signal listeners are
-always ready when those events arrive.
+(sensor.py) is set up after start() is called, so a CREATE signal can fire
+before its listeners are connected.  self.plugs and self.sensors are always
+updated regardless, and sensor.py seeds entities from them once it loads, so
+nothing discovered in that window is lost.
 
-Unlike the legacy UDP scan there is no scan_complete event.  The browser is
-continuous: new plugs are discovered as they appear and lost plugs are
-debounced before generating a device_lost event.
+There is no scan_complete event.  The browser is continuous: new plugs are
+discovered as they appear and lost plugs are debounced before generating a
+device_lost event.
 
 now_relaying_for role hint
 --------------------------
@@ -194,11 +196,15 @@ class PowersensorMessageDispatcher:
         the persisted role or None).
 
         The role is treated as best-effort:
-          - Present on most devices → send ROLE_UPDATE_SIGNAL to update
-            role-gated entities and persist the value.
+          - Present on most devices → record it in self.sensors and send
+            ROLE_UPDATE_SIGNAL to update role-gated entities and persist it.
           - Absent (None) on old hardware or occasionally on newer devices →
             leave whatever device_found already seeded; the first measurement
             event will correct it via the normal ROLE_UPDATE_SIGNAL path.
+
+        self.sensors is written here rather than only via sensor.py's
+        handle_role_update so that it is correct even when the sensor platform
+        has not connected its listeners yet (see "Discovery lifecycle" above).
         """
         mac = event.get("mac")
         if mac is None:
@@ -224,9 +230,9 @@ class PowersensorMessageDispatcher:
             current_role,
             wire_role,
         )
-        # ROLE_UPDATE_SIGNAL updates role-gated entities, persists the role,
-        # and keeps dispatcher.sensors in sync — all via sensor.py's
-        # handle_role_update callback.
+        self.sensors[mac] = wire_role
+        # ROLE_UPDATE_SIGNAL updates role-gated entities and persists the role
+        # via sensor.py's handle_role_update callback.
         async_dispatcher_send(self._hass, ROLE_UPDATE_SIGNAL, mac, wire_role)
 
     def _handle_device_lost(self, event: dict[str, Any]) -> None:

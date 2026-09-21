@@ -12,7 +12,7 @@ except where no observable HA boundary exists.
 from collections.abc import Callable, Coroutine
 from datetime import timedelta
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -101,6 +101,54 @@ async def test_plug_subscribe_called(
     await hass.async_block_till_done()
 
     mock_devices.subscribe.assert_called_with(PLUG_MAC)
+
+
+@pytest.mark.usefixtures("mock_async_zeroconf")
+async def test_devices_found_before_platform_setup_are_seeded(
+    hass: HomeAssistant,
+    mock_devices: MagicMock,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Devices discovered before the sensor platform loads still get entities.
+
+    Discovery starts before platforms are forwarded, so CREATE and ROLE_UPDATE
+    signals fired in that window have no listener.  Delivering the events from
+    inside start() reproduces that window exactly.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"roles": {}},
+        version=PowersensorConfigFlow.VERSION,
+        minor_version=PowersensorConfigFlow.MINOR_VERSION,
+    )
+    entry.add_to_hass(hass)
+
+    async def _start_and_discover(
+        cb: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+    ) -> None:
+        await cb({"event": "device_found", "mac": PLUG_MAC, "device_type": "plug"})
+        await cb({"event": "device_found", "mac": SENSOR_MAC, "device_type": "sensor"})
+        await cb(
+            {"event": "now_relaying_for", "mac": SENSOR_MAC, "role": ROLE_HOUSENET}
+        )
+
+    mock_devices.start = AsyncMock(side_effect=_start_and_discover)
+
+    with patch(
+        "homeassistant.components.powersensor_au.PowersensorZeroconfDevices",
+        return_value=mock_devices,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    assert len(entities) == _PLUG_COUNT + _HOUSENET_SENSOR_COUNT
+
+    unique_ids = {e.unique_id for e in entities}
+    assert f"{PLUG_MAC}_power" in unique_ids
+    assert f"{SENSOR_MAC}_power" in unique_ids
+    assert f"{SENSOR_MAC}_total_energy" in unique_ids
+    assert "vhh_home_usage" in unique_ids
 
 
 # ---------------------------------------------------------------------------

@@ -1,16 +1,20 @@
 """Tests for setup, unload, and migration of the Powersensor integration."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from powersensor_local import VirtualHousehold
+import pytest
 
 from homeassistant.components.powersensor_au.config_flow import PowersensorConfigFlow
 from homeassistant.components.powersensor_au.const import DOMAIN, ROLE_SOLAR
 from homeassistant.components.powersensor_au.models import PowersensorRuntimeData
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, async_fire_time_changed
 
 PLUG_MAC = "aabbccddeeff"
 
@@ -74,11 +78,18 @@ async def test_unload_skips_teardown_when_platform_unload_fails(
     assert config_entry.state is ConfigEntryState.FAILED_UNLOAD
 
 
-async def test_devices_start_failure_raises_config_entry_not_ready(
+@pytest.mark.usefixtures("mock_async_zeroconf")
+async def test_devices_start_failure_retries_and_recovers(
     hass: HomeAssistant,
-    mock_async_zeroconf: MagicMock,
+    mock_devices: MagicMock,
+    entity_registry: er.EntityRegistry,
 ) -> None:
-    """A RuntimeError from devices.start() leaves the entry in SETUP_RETRY."""
+    """A transient devices.start() failure retries and the entry then works normally.
+
+    The sensor platform must not be forwarded before the failure, otherwise the
+    retry finds it already registered and never re-runs its setup, leaving a
+    LOADED entry that creates no entities.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"roles": {}},
@@ -87,19 +98,33 @@ async def test_devices_start_failure_raises_config_entry_not_ready(
     )
     entry.add_to_hass(hass)
 
-    failing_devices = MagicMock()
-    failing_devices.start = AsyncMock(side_effect=RuntimeError("no socket"))
-    failing_devices.stop = AsyncMock()
+    mock_devices.start = AsyncMock(side_effect=[RuntimeError("no socket"), None])
 
     with patch(
         "homeassistant.components.powersensor_au.PowersensorZeroconfDevices",
-        return_value=failing_devices,
+        return_value=mock_devices,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-    assert entry.state is ConfigEntryState.SETUP_RETRY
-    failing_devices.stop.assert_awaited_once()
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+        mock_devices.stop.assert_awaited_once()
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=30))
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert mock_devices.start.await_count == 2
+
+    cb = mock_devices.start.call_args[0][0]
+    await cb({"event": "device_found", "mac": PLUG_MAC, "device_type": "plug"})
+    await hass.async_block_till_done()
+
+    entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    assert {e.unique_id for e in entities} >= {
+        f"{PLUG_MAC}_power",
+        f"{PLUG_MAC}_total_energy",
+    }
 
 
 async def test_setup_constructs_vhh_with_solar_when_role_persisted(
