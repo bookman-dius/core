@@ -1,13 +1,11 @@
 """Config flow for the Powersensor integration."""
 
-import logging
 from typing import Any, override
 
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState, ConfigFlowResult
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.selector import selector
 from homeassistant.helpers.service_info import zeroconf
 
@@ -18,11 +16,8 @@ from .const import (
     ROLE_HOUSENET,
     ROLE_SOLAR,
     ROLE_UNKNOWN,
-    ROLE_UPDATE_SIGNAL,
     ROLE_WATER,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -31,36 +26,36 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
 
+    _name2mac: dict[str, str]
+
     async def async_step_reconfigure(
         self, user_input: dict[str, str | None] | None = None
     ) -> ConfigFlowResult:
         """Handle reconfigure step. The primary use case is adding roles to sensors."""
         entry = self._get_reconfigure_entry()
-        if entry.state is not ConfigEntryState.LOADED:
-            return self.async_abort(reason="cannot_reconfigure")
-
-        try:
-            dispatcher = entry.runtime_data.dispatcher
-        except AttributeError:
-            return self.async_abort(reason="cannot_reconfigure")
-        if dispatcher is None:
-            return self.async_abort(reason="cannot_reconfigure")
-        mac2name = {mac: f"Powersensor Sensor ({mac})" for mac in dispatcher.sensors}
 
         if user_input is not None:
-            name2mac = {name: mac for mac, name in mac2name.items()}
+            roles: dict[str, str | None] = dict(entry.data[CFG_ROLES])
             for name, role in user_input.items():
-                mac = name2mac.get(name)
-                if mac is None:
-                    continue
-                resolved_role = None if role == ROLE_UNKNOWN else role
-                _LOGGER.debug("Applying %s to %s", resolved_role, mac)
-                async_dispatcher_send(self.hass, ROLE_UPDATE_SIGNAL, mac, resolved_role)
-            return self.async_abort(reason="roles_applied")
+                roles[self._name2mac[name]] = None if role == ROLE_UNKNOWN else role
+            return self.async_update_reload_and_abort(
+                entry, data_updates={CFG_ROLES: roles}
+            )
+
+        # The sensor list only exists in runtime discovery state.
+        if entry.state is not ConfigEntryState.LOADED:
+            return self.async_abort(reason="entry_not_loaded")
+
+        # Field keys are display names; remember the mapping so the submit step
+        # resolves exactly the sensors the user was shown.
+        self._name2mac = {
+            f"Powersensor Sensor ({mac})": mac
+            for mac in entry.runtime_data.dispatcher.sensors
+        }
 
         sensor_roles = {}
-        for sensor_mac in dispatcher.sensors:
-            role = entry.data.get(CFG_ROLES, {}).get(sensor_mac) or ROLE_UNKNOWN
+        for sensor_name, sensor_mac in self._name2mac.items():
+            role = entry.data[CFG_ROLES].get(sensor_mac) or ROLE_UNKNOWN
             sel = selector(
                 {
                     "select": {
@@ -76,7 +71,6 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }
                 }
             )
-            sensor_name = mac2name[sensor_mac]
             sensor_roles[
                 vol.Optional(
                     sensor_name,

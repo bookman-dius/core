@@ -416,16 +416,6 @@ async def async_setup_entry(
             # Plugs always have ROLE_APPLIANCE — no entity creation needed here.
             return
 
-        # Keep the dispatcher's in-memory role cache in sync.  When a role
-        # arrives via the reconfigure flow the dispatcher itself never sees a
-        # measurement event for it, so its sensors dict still holds the old
-        # (possibly None) value.  update_virtual_household_entities reads
-        # dispatcher.sensors.values() to decide whether to create VHH entities,
-        # so if this isn't updated now those entities won't be created until the
-        # next measurement arrives.
-        if mac_address in dispatcher.sensors:
-            dispatcher.sensors[mac_address] = new_role
-
         if new_role in (ROLE_SOLAR, ROLE_HOUSENET):
             async_dispatcher_send(hass, UPDATE_VHH_SIGNAL)
 

@@ -2,9 +2,8 @@
   "config": {
     "abort": {
       "already_in_progress": "Configuration is already in progress.",
-      "cannot_reconfigure": "Cannot reconfigure. Initial configuration incomplete or broken.",
+      "entry_not_loaded": "The Powersensor integration must be loaded before sensor roles can be reconfigured.",
       "firmware_not_compatible": "Plug firmware not compatible",
-      "roles_applied": "Roles successfully applied!",
       "single_instance_allowed": "Already configured. Only a single configuration possible."
     },
     "error": {

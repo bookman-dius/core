@@ -202,9 +202,9 @@ class PowersensorMessageDispatcher:
             leave whatever device_found already seeded; the first measurement
             event will correct it via the normal ROLE_UPDATE_SIGNAL path.
 
-        self.sensors is written here rather than only via sensor.py's
-        handle_role_update so that it is correct even when the sensor platform
-        has not connected its listeners yet (see "Discovery lifecycle" above).
+        self.sensors is written here, not by the signal's receiver, so it is
+        correct even when the sensor platform has not connected its listeners
+        yet (see "Discovery lifecycle" above).
         """
         mac = event.get("mac")
         if mac is None:
