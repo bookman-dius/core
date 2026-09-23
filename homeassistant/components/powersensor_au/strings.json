@@ -4,6 +4,7 @@
       "already_in_progress": "Configuration is already in progress.",
       "entry_not_loaded": "The Powersensor integration must be loaded before sensor roles can be reconfigured.",
       "firmware_not_compatible": "Plug firmware not compatible",
+      "no_sensors_found": "No Powersensor sensors have been discovered yet. Sensor roles can be set once a sensor reports to a plug.",
       "single_instance_allowed": "Already configured. Only a single configuration possible."
     },
     "error": {
@@ -18,9 +19,15 @@
         "description": "No Powersensor plugs were discovered on your network. You can still add the integration and if plugs are later discovered they will be added to Home Assistant. Do you want to add Powersensor to Home Assistant?",
         "title": "No Powersensor plugs discovered"
       },
-      "reconfigure": {
-        "description": "Set roles for sensors whose role is unknown or missing. To change an existing role, use the Powersensor App — sensor hardware roles set here will be overridden by the device. [Learn more]({docs_url})",
-        "title": "Update sensor roles"
+      "sensor_role": {
+        "data": {
+          "role": "Role"
+        },
+        "data_description": {
+          "role": "The role determines which measurements this sensor contributes to the household totals."
+        },
+        "description": "Select what {sensor} is measuring. To change an existing role, use the Powersensor App — sensor hardware roles set here will be overridden by the device. [Learn more]({docs_url})",
+        "title": "Set sensor role"
       }
     }
   },

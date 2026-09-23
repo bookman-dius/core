@@ -6,7 +6,12 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState, ConfigFlowResult
-from homeassistant.helpers.selector import selector
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info import zeroconf
 
 from .const import (
@@ -19,6 +24,29 @@ from .const import (
     ROLE_WATER,
 )
 
+CONF_ROLE = "role"
+DOCS_URL = (
+    "https://dius.github.io/homeassistant-powersensor/data.html#virtual-household"
+)
+
+SENSOR_ROLE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ROLE): SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    ROLE_HOUSENET,
+                    ROLE_SOLAR,
+                    ROLE_WATER,
+                    ROLE_APPLIANCE,
+                    ROLE_UNKNOWN,
+                ],
+                mode=SelectSelectorMode.DROPDOWN,
+                translation_key="sensor_role",
+            )
+        )
+    }
+)
+
 
 class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Powersensor."""
@@ -26,7 +54,8 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
 
-    _name2mac: dict[str, str]
+    _pending_macs: list[str]
+    _roles: dict[str, str | None]
 
     async def async_step_reconfigure(
         self, user_input: dict[str, str | None] | None = None
@@ -34,57 +63,53 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle reconfigure step. The primary use case is adding roles to sensors."""
         entry = self._get_reconfigure_entry()
 
-        if user_input is not None:
-            roles: dict[str, str | None] = dict(entry.data[CFG_ROLES])
-            for name, role in user_input.items():
-                roles[self._name2mac[name]] = None if role == ROLE_UNKNOWN else role
-            return self.async_update_reload_and_abort(
-                entry, data_updates={CFG_ROLES: roles}
-            )
-
         # The sensor list only exists in runtime discovery state.
         if entry.state is not ConfigEntryState.LOADED:
             return self.async_abort(reason="entry_not_loaded")
 
-        # Field keys are display names; remember the mapping so the submit step
-        # resolves exactly the sensors the user was shown.
-        self._name2mac = {
-            f"Powersensor Sensor ({mac})": mac
-            for mac in entry.runtime_data.dispatcher.sensors
-        }
+        self._pending_macs = list(entry.runtime_data.dispatcher.sensors)
+        if not self._pending_macs:
+            return self.async_abort(reason="no_sensors_found")
 
-        sensor_roles = {}
-        for sensor_name, sensor_mac in self._name2mac.items():
-            role = entry.data[CFG_ROLES].get(sensor_mac) or ROLE_UNKNOWN
-            sel = selector(
-                {
-                    "select": {
-                        "options": [
-                            ROLE_HOUSENET,
-                            ROLE_SOLAR,
-                            ROLE_WATER,
-                            ROLE_APPLIANCE,
-                            ROLE_UNKNOWN,
-                        ],
-                        "mode": "dropdown",
-                        "translation_key": "sensor_role",
-                    }
-                }
-            )
-            sensor_roles[
-                vol.Optional(
-                    sensor_name,
-                    description={"suggested_value": role, "name": sensor_name},
+        self._roles = dict(entry.data[CFG_ROLES])
+        return await self.async_step_sensor_role()
+
+    async def async_step_sensor_role(
+        self, user_input: dict[str, str] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the role of each discovered sensor, one sensor per step."""
+        if user_input is not None:
+            mac = self._pending_macs.pop(0)
+            role = user_input[CONF_ROLE]
+            self._roles[mac] = None if role == ROLE_UNKNOWN else role
+            if not self._pending_macs:
+                return self.async_update_reload_and_abort(
+                    self._get_reconfigure_entry(), data_updates={CFG_ROLES: self._roles}
                 )
-            ] = sel
 
-        docs_url = "https://dius.github.io/homeassistant-powersensor/data.html#virtual-household"
-
+        mac = self._pending_macs[0]
         return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=vol.Schema(sensor_roles),
-            description_placeholders={"docs_url": docs_url},
+            step_id="sensor_role",
+            data_schema=self.add_suggested_values_to_schema(
+                SENSOR_ROLE_SCHEMA, {CONF_ROLE: self._roles.get(mac) or ROLE_UNKNOWN}
+            ),
+            description_placeholders={
+                "sensor": self._sensor_name(
+                    self._get_reconfigure_entry().entry_id, mac
+                ),
+                "docs_url": DOCS_URL,
+            },
+            last_step=len(self._pending_macs) == 1,
         )
+
+    def _sensor_name(self, entry_id: str, mac: str) -> str:
+        """Return the name the user sees for this sensor in the device registry."""
+        device = dr.async_get(self.hass).async_get_device_by_identifier(
+            (DOMAIN, mac), entry_id
+        )
+        if device is None:
+            return mac
+        return device.name_by_user or device.name or mac
 
     async def _async_prepare_setup(self) -> ConfigFlowResult | None:
         """Register a unique ID and guard against duplicate entries or parallel flows."""
