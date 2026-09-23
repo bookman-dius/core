@@ -60,7 +60,13 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, str | None] | None = None
     ) -> ConfigFlowResult:
-        """Handle reconfigure step. The primary use case is adding roles to sensors."""
+        """Handle reconfigure step. The primary use case is adding roles to sensors.
+
+        This is a workaround rather than part of normal setup.  Roles come from
+        the hardware, and a sensor that reports one overrides what is set here.
+        It exists for sensors that have forgotten their own role — a rev 6
+        sensor whose battery ran flat, say — and never report one again.
+        """
         entry = self._get_reconfigure_entry()
 
         # The sensor list only exists in runtime discovery state.

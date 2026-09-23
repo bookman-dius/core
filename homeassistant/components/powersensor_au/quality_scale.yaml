@@ -73,7 +73,15 @@ rules:
   icon-translations: todo
   reconfiguration-flow: todo
   repair-issues: todo
-  stale-devices: todo
+  stale-devices:
+    status: exempt
+    comment: |
+      Devices and their role-gated entities are deliberately never removed.
+      Sensors drop off the network and re-appear, and a sensor that has
+      forgotten its role reports the real one again once it recovers, so a
+      removal would usually be undone moments later and would discard the
+      energy history recorded against those entities.  Hardware that has
+      genuinely been removed or re-purposed is deleted by the user.
 
   # Platinum
   async-dependency: todo

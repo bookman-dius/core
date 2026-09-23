@@ -392,6 +392,8 @@ async def async_setup_entry(
     # Tracks which role-gated sensor entities have been created, keyed by
     # (mac, description.key).  Used only to prevent handle_role_update from
     # re-adding entities that handle_discovered_sensor already created.
+    # Entries are never removed on a role change, matching the fact that the
+    # entities themselves are kept (see handle_role_update).
     role_entities_added: set[tuple[str, str]] = set()
 
     entry_id = entry.entry_id
@@ -399,7 +401,16 @@ async def async_setup_entry(
     # Role update handling
     @callback
     def handle_role_update(mac_address: str, new_role: str | None) -> None:
-        """Persist role changes and trigger a VHH refresh when needed."""
+        """Persist a role change and add whatever entities the new role enables.
+
+        Entities belonging to the previous role are deliberately left in place.
+        Role changes are usually transient: a sensor that has forgotten its
+        role reports the real one again as soon as it recovers, and the role
+        set through the reconfigure flow is overridden the moment that happens.
+        Removing entities in between would discard the energy history they have
+        recorded.  A sensor that has genuinely been re-purposed therefore needs
+        its stale entities deleted by hand.
+        """
         existing_roles: dict[str, str | None] = dict(entry.data.get(CFG_ROLES, {}))
         old_role = existing_roles.get(mac_address)
 
@@ -497,6 +508,9 @@ async def async_setup_entry(
         VirtualHousehold automatically enables solar processing when it first
         receives a solar-role event (see VirtualHousehold.process_average_power_event),
         so no reload is needed when a solar sensor is discovered mid-session.
+
+        Groups are only ever added, never removed — see
+        PowersensorVirtualHouseholdState.
         """
         has_mains = any(role == ROLE_HOUSENET for role in dispatcher.sensors.values())
         has_solar = any(role == ROLE_SOLAR for role in dispatcher.sensors.values())
