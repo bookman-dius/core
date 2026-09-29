@@ -79,6 +79,9 @@ def _joules_to_kwh(joules: float) -> float:
     return joules / 3_600_000.0
 
 
+# States of the device_role ENUM entities.  Wire roles are snake_cased to match.
+_DEVICE_ROLE_OPTIONS = ["appliance", "house_net", "solar", "unknown", "water"]
+
 _SENSOR_DEVICE_TRANSLATION_KEYS: dict[str | None, str] = {
     ROLE_HOUSENET: "mains_sensor",
     ROLE_SOLAR: "solar_sensor",
@@ -167,7 +170,7 @@ SENSOR_DESCRIPTIONS: tuple[PowersensorSensorEntityDescription, ...] = (
         key="device_role",
         translation_key="device_role",
         device_class=SensorDeviceClass.ENUM,
-        options=["appliance", "house_net", "solar", "unknown", "water"],
+        options=_DEVICE_ROLE_OPTIONS,
         entity_category=EntityCategory.DIAGNOSTIC,
         event="role",
         message_key="role",
@@ -280,7 +283,7 @@ PLUG_DESCRIPTIONS: tuple[PowersensorSensorEntityDescription, ...] = (
         key="device_role",
         translation_key="device_role",
         device_class=SensorDeviceClass.ENUM,
-        options=["appliance", "house_net", "solar", "unknown", "water"],
+        options=_DEVICE_ROLE_OPTIONS,
         entity_category=EntityCategory.DIAGNOSTIC,
         event="role",
         message_key="role",
@@ -598,6 +601,7 @@ class PowersensorEntity(SensorEntity):
     ) -> None:
         """Initialize the entity."""
         self._role: str | None = role
+        self._unrecognised_role: str | None = None
         self._has_recently_received_update_message = False
         self._attr_native_value = None
         self._config_entry_id = config_entry_id
@@ -670,13 +674,24 @@ class PowersensorEntity(SensorEntity):
             elif desc.key == "device_role":
                 # State translation keys must be snake_case.  The wire value
                 # "house-net" is normalized to "house_net" so it matches the
-                # key in strings.json.  All other role strings are already valid.
+                # key in strings.json.  All other known roles are already valid.
                 # None means the sensor has no role yet; map to "unknown" so the
                 # entity always has a valid translation key rather than a None state.
-                if raw is None:
-                    self._attr_native_value = "unknown"
-                else:
-                    self._attr_native_value = raw.replace("-", "_")
+                role = "unknown" if raw is None else raw.replace("-", "_")
+                # Firmware may report roles this integration doesn't know yet.
+                # Core rejects an ENUM state outside its options on every write,
+                # so show those as unknown.  Only the display is clamped: the
+                # real role is still persisted and passed to VirtualHousehold.
+                if role not in _DEVICE_ROLE_OPTIONS:
+                    if role != self._unrecognised_role:
+                        _LOGGER.debug(
+                            "Unrecognised role %r reported by %s; showing as unknown",
+                            raw,
+                            self._mac,
+                        )
+                        self._unrecognised_role = role
+                    role = "unknown"
+                self._attr_native_value = role
             else:
                 self._attr_native_value = raw
 

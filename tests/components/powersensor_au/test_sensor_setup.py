@@ -11,6 +11,7 @@ except where no observable HA boundary exists.
 
 from collections.abc import Callable, Coroutine
 from datetime import timedelta
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -35,6 +36,8 @@ from tests.common import MockConfigEntry, async_fire_time_changed
 PLUG_MAC = "aabbccddeeff"
 SENSOR_MAC = "112233445566"
 SOLAR_MAC = "665544332211"
+# A role newer firmware might report that this integration does not know.
+UNRECOGNISED_ROLE = "gas"
 
 # Expected entity counts from sensor.py description tuples.
 # 7 total; 3 universal (battery_level, device_role, rssi_ble) + role-gated.
@@ -886,3 +889,54 @@ async def test_role_change_writes_device_registry_once(
     )
     assert device is not None
     assert device.name == f"Powersensor Solar Sensor ({SENSOR_MAC})"
+
+
+async def test_unrecognised_role_is_shown_as_unknown(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    fire: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+    entity_registry: er.EntityRegistry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A role outside the ENUM options is displayed as unknown rather than rejected.
+
+    Only the display is clamped; the reported role is still persisted.
+    """
+    caplog.set_level(logging.DEBUG)
+    await fire({"event": "device_found", "mac": SENSOR_MAC, "device_type": "sensor"})
+    await fire(
+        {
+            "event": "battery_level",
+            "mac": SENSOR_MAC,
+            "role": ROLE_HOUSENET,
+            "volts": 4.0,
+        }
+    )
+    await hass.async_block_till_done()
+    entity_id = entity_registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{SENSOR_MAC}_device_role"
+    )
+    assert entity_id is not None
+    assert hass.states.get(entity_id).state == "house_net"
+
+    for _ in range(3):
+        await fire(
+            {
+                "event": "battery_level",
+                "mac": SENSOR_MAC,
+                "role": UNRECOGNISED_ROLE,
+                "volts": 4.0,
+            }
+        )
+        await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).state == "unknown"
+    assert "not in the list of options" not in caplog.text
+    assert caplog.text.count(f"Unrecognised role '{UNRECOGNISED_ROLE}'") == 1
+    assert config_entry.data["roles"][SENSOR_MAC] == UNRECOGNISED_ROLE
+
+    await fire(
+        {"event": "battery_level", "mac": SENSOR_MAC, "role": ROLE_SOLAR, "volts": 4.0}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "solar"

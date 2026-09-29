@@ -34,6 +34,8 @@ SECOND_MAC = "a4cf1218f160"
 MAINS_MAC = "c001eat5"
 SOLAR_MAC = "cafebabe"
 UNKNOWN_MAC = "d3adb33f"
+# A role newer firmware might report that this integration does not know.
+UNRECOGNISED_ROLE = "gas"
 
 
 @pytest.fixture
@@ -320,6 +322,35 @@ async def test_reconfigure_step_shows_current_role_and_device_name(
         key.description["suggested_value"] for key in result["data_schema"].schema
     ]
     assert suggested == [expected_role]
+
+
+async def test_reconfigure_suggests_unknown_for_unrecognised_role(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    fire: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+) -> None:
+    """A persisted role that is not a selector option is suggested as unknown."""
+    await fire({"event": "device_found", "mac": UNKNOWN_MAC, "device_type": "sensor"})
+    await fire(
+        {"event": "now_relaying_for", "mac": UNKNOWN_MAC, "role": UNRECOGNISED_ROLE}
+    )
+    await hass.async_block_till_done()
+    assert config_entry.data[CFG_ROLES][UNKNOWN_MAC] == UNRECOGNISED_ROLE
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": config_entry.entry_id,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["data_schema"] is not None
+    suggested = [
+        key.description["suggested_value"] for key in result["data_schema"].schema
+    ]
+    assert suggested == [ROLE_UNKNOWN]
 
 
 @pytest.mark.usefixtures("mock_async_zeroconf")

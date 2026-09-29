@@ -29,17 +29,13 @@ DOCS_URL = (
     "https://dius.github.io/homeassistant-powersensor/data.html#virtual-household"
 )
 
+ROLE_OPTIONS = [ROLE_HOUSENET, ROLE_SOLAR, ROLE_WATER, ROLE_APPLIANCE, ROLE_UNKNOWN]
+
 SENSOR_ROLE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ROLE): SelectSelector(
             SelectSelectorConfig(
-                options=[
-                    ROLE_HOUSENET,
-                    ROLE_SOLAR,
-                    ROLE_WATER,
-                    ROLE_APPLIANCE,
-                    ROLE_UNKNOWN,
-                ],
+                options=ROLE_OPTIONS,
                 mode=SelectSelectorMode.DROPDOWN,
                 translation_key="sensor_role",
             )
@@ -94,10 +90,14 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
         mac = self._pending_macs[0]
+        # A role newer firmware reported may not be one of the selector options.
+        suggested = self._roles.get(mac)
+        if suggested not in ROLE_OPTIONS:
+            suggested = ROLE_UNKNOWN
         return self.async_show_form(
             step_id="sensor_role",
             data_schema=self.add_suggested_values_to_schema(
-                SENSOR_ROLE_SCHEMA, {CONF_ROLE: self._roles.get(mac) or ROLE_UNKNOWN}
+                SENSOR_ROLE_SCHEMA, {CONF_ROLE: suggested}
             ),
             description_placeholders={
                 "sensor": self._sensor_name(
