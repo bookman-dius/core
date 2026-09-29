@@ -26,7 +26,7 @@ from homeassistant.components.powersensor_au.const import (
 )
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util.dt import utcnow
 
@@ -851,3 +851,38 @@ async def test_role_update_signal_noop_when_persisted_role_matches(
     await hass.async_block_till_done()
 
     assert len(_registered(hass, config_entry)) == count
+
+
+async def test_role_change_writes_device_registry_once(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    fire: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """A role change renames the device with a single registry write.
+
+    The device is named after its role, and every entity of the sensor sees the
+    role change, so the rename must not be done once per entity.
+    """
+    await fire({"event": "device_found", "mac": SENSOR_MAC, "device_type": "sensor"})
+    await fire({"event": "now_relaying_for", "mac": SENSOR_MAC, "role": ROLE_HOUSENET})
+    await hass.async_block_till_done()
+    assert len(_registered(hass, config_entry)) > 1
+
+    # house-net and solar gate the same entities, so nothing is added here and
+    # every write seen comes from the rename itself.
+    with patch.object(
+        device_registry,
+        "async_get_or_create",
+        wraps=device_registry.async_get_or_create,
+    ) as mock_get_or_create:
+        await fire({"event": "now_relaying_for", "mac": SENSOR_MAC, "role": ROLE_SOLAR})
+        await hass.async_block_till_done()
+
+    assert mock_get_or_create.call_count == 1
+
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, SENSOR_MAC), config_entry.entry_id
+    )
+    assert device is not None
+    assert device.name == f"Powersensor Solar Sensor ({SENSOR_MAC})"

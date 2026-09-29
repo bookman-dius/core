@@ -79,6 +79,19 @@ def _joules_to_kwh(joules: float) -> float:
     return joules / 3_600_000.0
 
 
+_SENSOR_DEVICE_TRANSLATION_KEYS: dict[str | None, str] = {
+    ROLE_HOUSENET: "mains_sensor",
+    ROLE_SOLAR: "solar_sensor",
+    ROLE_WATER: "water_sensor",
+    ROLE_APPLIANCE: "appliance_sensor",
+}
+
+
+def _sensor_device_translation_key(role: str | None) -> str:
+    """Return the device-registry translation key naming a sensor by its role."""
+    return _SENSOR_DEVICE_TRANSLATION_KEYS.get(role, "unknown_sensor")
+
+
 @dataclass(frozen=True, kw_only=True)
 class PowersensorSensorEntityDescription(SensorEntityDescription):
     """Describes a single measurement entity for an electricity/water sensor or plug.
@@ -427,6 +440,16 @@ async def async_setup_entry(
             # Plugs always have ROLE_APPLIANCE — no entity creation needed here.
             return
 
+        # The device is named after its role, but core only reads device_info
+        # when an entity is added, so the rename has to go to the registry
+        # directly.  Done here rather than per entity to keep it to one write.
+        dr.async_get(hass).async_get_or_create(
+            config_entry_id=entry_id,
+            identifiers={(DOMAIN, mac_address)},
+            translation_key=_sensor_device_translation_key(new_role),
+            translation_placeholders={"id": mac_address},
+        )
+
         if new_role in (ROLE_SOLAR, ROLE_HOUSENET):
             async_dispatcher_send(hass, UPDATE_VHH_SIGNAL)
 
@@ -664,68 +687,20 @@ class PowersensorEntity(SensorEntity):
 class PowersensorSensorEntity(PowersensorEntity):
     """Entity representing a single measurement from a Powersensor electricity/water sensor."""
 
-    def __init__(
-        self,
-        entry_id: str,
-        mac: str,
-        role: str | None,
-        description: PowersensorSensorEntityDescription,
-    ) -> None:
-        """Initialize the sensor entity."""
-        super().__init__(entry_id, mac, role, description)
-        self._current_translation_key: str | None = self._get_translation_key()
-
     @property
     @override
     def device_info(self) -> DeviceInfo:
-        """Return device info for this sensor hardware unit."""
+        """Return device info for this sensor hardware unit.
+
+        Only read when the entity is added; a later role change renames the
+        device from the platform's handle_role_update.
+        """
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
             manufacturer="Powersensor",
             model="PowersensorSensor",
-            translation_key=self._current_translation_key,
+            translation_key=_sensor_device_translation_key(self._role),
             translation_placeholders={"id": self._mac},
-        )
-
-    def _get_translation_key(self) -> str | None:
-        return {
-            ROLE_HOUSENET: "mains_sensor",
-            ROLE_SOLAR: "solar_sensor",
-            ROLE_WATER: "water_sensor",
-            ROLE_APPLIANCE: "appliance_sensor",
-            None: "unknown_sensor",
-        }.get(self._role, "unknown_sensor")
-
-    @callback
-    def _handle_role_update(self, mac: str, role: str | None) -> None:
-        """Handle a role update, refreshing the device registry translation key."""
-        if self._mac != mac or self._role == role:
-            return
-        self._role = role
-        self._current_translation_key = self._get_translation_key()
-        device_registry = dr.async_get(self.hass)
-        info = self.device_info
-        device_registry.async_get_or_create(
-            config_entry_id=self._config_entry_id,
-            identifiers={(DOMAIN, self._mac)},
-            translation_key=info.get("translation_key"),
-            translation_placeholders=info.get("translation_placeholders"),
-        )
-        self.async_write_ha_state()
-
-    @override
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to data-update signal and also ROLE_UPDATE_SIGNAL.
-
-        Sensors can change role at runtime (e.g. when first assigned via the
-        app), so they need the role-update subscription in addition to the
-        common data-update subscription provided by the base class.
-        """
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, ROLE_UPDATE_SIGNAL, self._handle_role_update
-            )
         )
 
 
