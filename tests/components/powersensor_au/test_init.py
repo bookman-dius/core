@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 from tests.common import MockConfigEntry, async_fire_time_changed
 
 PLUG_MAC = "aabbccddeeff"
+SENSOR_MAC = "112233445566"
 
 
 async def test_setup_entry_populates_runtime_data(
@@ -57,25 +58,36 @@ async def test_unload_calls_disconnect_and_stop(
     # check indirectly that no exception was raised (state is NOT_LOADED).
 
 
-async def test_unload_skips_teardown_when_platform_unload_fails(
+async def test_event_during_unload_does_not_orphan_entities(
     hass: HomeAssistant,
     mock_devices: MagicMock,
     config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """stop() is NOT called when async_unload_platforms returns False."""
-    mock_devices.stop.reset_mock()
+    """A device announced while unloading must not leave entities behind.
 
-    with patch(
-        "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
-        return_value=False,
-    ):
-        result = await hass.config_entries.async_unload(config_entry.entry_id)
-        await hass.async_block_till_done()
+    The library can deliver events until stop() returns.  If those reached a
+    platform that had already been unloaded, its entities would never be
+    removed, and the device's entities would be rejected as duplicates on the
+    next load.
+    """
+    callback = mock_devices.start.call_args[0][0]
+    device_found = {"event": "device_found", "mac": SENSOR_MAC, "device_type": "sensor"}
 
-    assert result is False
-    mock_devices.stop.assert_not_called()
-    # Entry transitions to FAILED_UNLOAD (not LOADED) when unload fails.
-    assert config_entry.state is ConfigEntryState.FAILED_UNLOAD
+    async def announce_while_stopping() -> None:
+        await callback(device_found)
+
+    mock_devices.stop = AsyncMock(side_effect=announce_while_stopping)
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    mock_devices.stop = AsyncMock()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await mock_devices.start.call_args[0][0](device_found)
+    await hass.async_block_till_done()
+
+    assert "does not generate unique IDs" not in caplog.text
 
 
 @pytest.mark.usefixtures("mock_async_zeroconf")

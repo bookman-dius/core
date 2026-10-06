@@ -57,7 +57,9 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: PowersensorConfigEntry
 ) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        await entry.runtime_data.dispatcher.disconnect()
-        await entry.runtime_data.devices.stop()
-    return unload_ok
+    # Stop events before unloading platforms: the platform's listeners are only
+    # removed after this returns, so an event arriving while a platform resets
+    # would add entities to it that are never removed.
+    await entry.runtime_data.dispatcher.disconnect()
+    await entry.runtime_data.devices.stop()
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
