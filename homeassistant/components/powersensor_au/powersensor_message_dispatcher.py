@@ -30,11 +30,14 @@ device_lost event.
 
 now_relaying_for role hint
 --------------------------
-When relay_now_relaying_for=True is passed to PowersensorZeroconfDevices, the
-library forwards the raw now_relaying_for event to the callback immediately
-after synthesizing the device_found event for the sensor.  This event carries
-the role field directly from the wire message, which lets us seed the role in
-HA without waiting for the first measurement event to arrive.
+device_found carries no role.  The library documents that role information is
+not reliably available at that point because of hardware limitations, so it
+leaves the field out.  relay_now_relaying_for=True is the library's option for
+callers that want the relayed message as well: it forwards the raw
+now_relaying_for event to the callback immediately after the synthesised
+device_found for the same sensor.  That event carries the role field straight
+from the wire, which lets us seed the role in HA without waiting for the first
+measurement event to arrive.
 
 The role is treated as a hint: present on most devices, absent on some very old
 hardware, and occasionally None/unknown on newer devices.  When absent or None
@@ -44,14 +47,16 @@ normal ROLE_UPDATE_SIGNAL path.
 
 Expiry recovery
 ---------------
-The library's expiry timer removes devices that have been silent for too long
-(e.g. a plug that was temporarily offline).  When the plug re-announces via
-mDNS, the library re-adds the device and fires device_found again.  When that
-happens, the MAC is already in self.plugs / self.sensors (entities already
-exist), so we skip the CREATE signal to avoid duplicates — but we MUST still
-call devices.subscribe(mac) because the re-added _Device object starts with
-subscribed=False.  Without this re-subscribe, _emit_if_subscribed silently
-drops all events and the sensors appear permanently dead.
+The library removes a device that disappears from the network or stays silent
+for too long (e.g. a plug that was temporarily offline), and fires device_found
+again if it comes back.  Its subscription is removed along with it: the
+library's subscribe() documents that subscriptions do not survive a device
+disappearing, and that callers who still want its events must re-subscribe on
+device_found.  When that happens, the MAC is already in self.plugs /
+self.sensors (entities already exist), so we skip the CREATE signal to avoid
+duplicates — but we MUST still call devices.subscribe(mac).  Without it the
+library delivers none of the device's events and its entities appear
+permanently dead.
 """
 
 import logging
@@ -100,9 +105,10 @@ class PowersensorMessageDispatcher:
         self._entry = entry
         self._vhh = vhh
 
-        # Tracks known devices so that rescans don't create duplicate entities.
-        # The library deduplicates on its side too, but we guard here as well
-        # since sensor.py has no other way to detect a duplicate CREATE signal.
+        # Tracks known devices.  The library announces a device only once while
+        # it holds it, but announces it again after removing it, so this is what
+        # stops a returning device from getting duplicate entities (see
+        # _handle_device_found).
         self.plugs: set[str] = set()
         self.sensors: dict[str, str | None] = {}
 
@@ -128,12 +134,13 @@ class PowersensorMessageDispatcher:
         """Handle a newly discovered plug or sensor.
 
         The library emits device_found for both plugs (found via mDNS) and
-        sensors (found when a plug relays a now_relaying_for message, which
-        the library converts to a device_found internally).
+        sensors (found when a plug relays a now_relaying_for message, from
+        which the library synthesises the device_found).
 
-        Note: the library does not populate role in the device_found event for
-        sensors — it is lost in the now_relaying_for → _add_device conversion.
-        The role arrives separately via the forwarded now_relaying_for event
+        Note: device_found carries no role.  The library documents that role
+        information is not reliably available at that point because of
+        hardware limitations.  The role arrives separately via the forwarded
+        now_relaying_for event
         (handled by _handle_now_relaying_for), which fires immediately after
         device_found for the same sensor in the same event sequence.  As a
         belt-and-braces fallback we also check the persisted role so that
@@ -142,12 +149,13 @@ class PowersensorMessageDispatcher:
         ready.
 
         Re-subscribe after expiry: if the MAC is already known (i.e. we have
-        entities for it) but the library re-fired device_found because its
-        internal _Device was removed by the expiry timer and then re-added by
-        a new mDNS announcement, we skip the CREATE signal (no duplicate
-        entities) but still call devices.subscribe(mac).  The library creates
-        a fresh _Device with subscribed=False, so without this call
-        _emit_if_subscribed would silently discard all subsequent events.
+        entities for it), the library removed the device after it disappeared
+        or went silent, and is now announcing it again.  We skip the CREATE
+        signal (no duplicate entities) but still call devices.subscribe(mac).
+        The library drops a device's subscription when it removes the device,
+        and its subscribe() documentation asks callers to re-subscribe on
+        device_found; without this call none of the device's subsequent events
+        would be delivered.
         """
         mac = event.get("mac")
         device_type = event.get("device_type")
@@ -161,9 +169,9 @@ class PowersensorMessageDispatcher:
                 self._entry.runtime_data.devices.subscribe(mac)
                 async_dispatcher_send(self._hass, CREATE_PLUG_SIGNAL, mac)
             else:
-                # MAC already known — device was removed by expiry timer and
-                # re-added by a fresh mDNS announcement.  Re-subscribe so
-                # events flow again.
+                # MAC already known — the library removed the device and is
+                # announcing it again.  Its subscription went with it, so
+                # re-subscribe for events to flow again.
                 _LOGGER.debug(
                     "Plug re-discovered after expiry, re-subscribing: %s", mac
                 )
@@ -260,7 +268,10 @@ class PowersensorMessageDispatcher:
 
         # Compute the effective role without mutating the library's dict.
         # When the device reports no role (or ROLE_UNKNOWN), fall back to the
-        # persisted role so downstream entities see a stable value.
+        # persisted role so downstream entities see a stable value.  This is
+        # also how a role assigned in the reconfigure flow takes effect for a
+        # sensor that never reports one: VirtualHousehold only counts events
+        # whose role is house-net or solar.
         effective_role = persisted_role if role is None else role
 
         if role is not None and role != persisted_role:

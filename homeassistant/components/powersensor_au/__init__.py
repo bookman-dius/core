@@ -27,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PowersensorConfigEntry) 
     zc_instance = await zeroconf.async_get_instance(hass)
     devices = PowersensorZeroconfDevices(
         zeroconf_instance=zc_instance,
+        # device_found carries no role; the relayed now_relaying_for supplies it.
         relay_now_relaying_for=True,
         logger=_LOGGER,
     )
