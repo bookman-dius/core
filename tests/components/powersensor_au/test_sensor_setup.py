@@ -724,37 +724,6 @@ async def test_sensor_rediscovery_resubscribes(
 
 
 # ---------------------------------------------------------------------------
-# Dispatcher — measurement from unknown MAC creates sensor on the fly
-# ---------------------------------------------------------------------------
-
-
-async def test_measurement_from_unknown_mac_creates_sensor(
-    hass: HomeAssistant,
-    mock_devices: MagicMock,
-    config_entry: MockConfigEntry,
-    fire: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
-) -> None:
-    """A measurement arriving for an unseen MAC bootstraps sensor entities."""
-    assert len(_registered(hass, config_entry)) == 0
-
-    await fire(
-        {
-            "event": "average_power",
-            "mac": SENSOR_MAC,
-            "role": ROLE_HOUSENET,
-            "watts": 800.0,
-            "starttime_utc": 1700000000,
-            "duration_s": 10,
-        }
-    )
-    await hass.async_block_till_done()
-
-    # Universal entities + housenet role-gated + VHH = _HOUSENET_SENSOR_COUNT.
-    assert len(_registered(hass, config_entry)) == _HOUSENET_SENSOR_COUNT
-    mock_devices.subscribe.assert_called_with(SENSOR_MAC)
-
-
-# ---------------------------------------------------------------------------
 # sensor.py — role-update no-ops
 # ---------------------------------------------------------------------------
 

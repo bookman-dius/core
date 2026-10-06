@@ -375,11 +375,38 @@ async def test_reconfigure_aborts_when_entry_not_loaded(hass: HomeAssistant) -> 
     assert result["reason"] == "entry_not_loaded"
 
 
+@pytest.mark.parametrize(
+    "events",
+    [
+        pytest.param([], id="nothing_discovered"),
+        pytest.param(
+            [
+                {"event": "device_found", "mac": PLUG_MAC, "device_type": "plug"},
+                # Plugs report a role too; that must not make them a sensor.
+                {
+                    "event": "average_power",
+                    "mac": PLUG_MAC,
+                    "role": ROLE_APPLIANCE,
+                    "watts": 50.0,
+                    "starttime_utc": 1700000000,
+                    "duration_s": 10,
+                },
+            ],
+            id="only_plugs",
+        ),
+    ],
+)
 async def test_reconfigure_aborts_when_no_sensors_discovered(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
+    fire: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+    events: list[dict[str, Any]],
 ) -> None:
     """Reconfigure aborts when the entry is loaded but no sensor has been seen yet."""
+    for event in events:
+        await fire(event)
+    await hass.async_block_till_done()
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={

@@ -256,12 +256,6 @@ class PowersensorMessageDispatcher:
             return
 
         role = _filter_unknown(message.get("role"))
-        if mac not in self.sensors and mac not in self.plugs:
-            _LOGGER.debug("Resubscribing sensor %s from measurement event", mac)
-            self.sensors[mac] = role
-            self._entry.runtime_data.devices.subscribe(mac)
-            async_dispatcher_send(self._hass, CREATE_SENSOR_SIGNAL, mac, role)
-
         persisted_role = _filter_unknown(self._entry.data.get(CFG_ROLES, {}).get(mac))
 
         # Compute the effective role without mutating the library's dict.
@@ -270,7 +264,10 @@ class PowersensorMessageDispatcher:
         effective_role = persisted_role if role is None else role
 
         if role is not None and role != persisted_role:
-            self.sensors[mac] = role
+            # Plugs report a role too; it is persisted via the signal, but a
+            # plug must not end up listed among the sensors.
+            if mac in self.sensors:
+                self.sensors[mac] = role
             async_dispatcher_send(self._hass, ROLE_UPDATE_SIGNAL, mac, role)
 
         # Build the outbound message with the effective role injected.
