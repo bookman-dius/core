@@ -23,6 +23,7 @@ from .const import (
     ROLE_UNKNOWN,
     ROLE_WATER,
 )
+from .models import PowersensorConfigEntry
 
 CONF_ROLE = "role"
 DOCS_URL = (
@@ -63,7 +64,7 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         It exists for sensors that have forgotten their own role — a rev 6
         sensor whose battery ran flat, say — and never report one again.
         """
-        entry = self._get_reconfigure_entry()
+        entry: PowersensorConfigEntry = self._get_reconfigure_entry()
 
         # The sensor list only exists in runtime discovery state.
         if entry.state is not ConfigEntryState.LOADED:

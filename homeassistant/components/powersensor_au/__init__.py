@@ -23,7 +23,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: PowersensorConfigEntry) 
     """Set up integration from a config entry."""
     with_solar = ROLE_SOLAR in entry.data.get(CFG_ROLES, {}).values()
     vhh = VirtualHousehold(with_solar)
-    dispatcher = PowersensorMessageDispatcher(hass, entry, vhh)
     zc_instance = await zeroconf.async_get_instance(hass)
     devices = PowersensorZeroconfDevices(
         zeroconf_instance=zc_instance,
@@ -31,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PowersensorConfigEntry) 
         relay_now_relaying_for=True,
         logger=_LOGGER,
     )
+    dispatcher = PowersensorMessageDispatcher(hass, entry, vhh, devices)
 
     entry.runtime_data = PowersensorRuntimeData(
         vhh=vhh,

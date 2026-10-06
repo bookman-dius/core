@@ -1,6 +1,6 @@
 """PowersensorMessageDispatcher routes PowersensorDevices events to HA entities.
 
-The dispatcher owns a single PowersensorZeroconfDevices instance (from
+The dispatcher is given the PowersensorZeroconfDevices instance (from
 powersensor_local) which handles all plug connections, reconnections, and sensor
 discovery internally.  The dispatcher's sole responsibility is to translate the
 unified event stream into HA dispatcher signals that drive entity creation and
@@ -63,6 +63,7 @@ import logging
 from typing import Any
 
 from powersensor_local import VirtualHousehold
+from powersensor_local.zeroconf_devices import PowersensorZeroconfDevices
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -93,6 +94,7 @@ class PowersensorMessageDispatcher:
         hass: HomeAssistant,
         entry: ConfigEntry,
         vhh: VirtualHousehold,
+        devices: PowersensorZeroconfDevices,
     ) -> None:
         """Initialize the dispatcher.
 
@@ -100,10 +102,12 @@ class PowersensorMessageDispatcher:
             hass: The Home Assistant instance.
             entry: The config entry this dispatcher belongs to.
             vhh: The VirtualHousehold calculation engine.
+            devices: The library instance whose events this dispatcher routes.
         """
         self._hass = hass
         self._entry = entry
         self._vhh = vhh
+        self._devices = devices
 
         # Tracks known devices.  The library announces a device only once while
         # it holds it, but announces it again after removing it, so this is what
@@ -166,7 +170,7 @@ class PowersensorMessageDispatcher:
             if mac not in self.plugs:
                 _LOGGER.debug("New plug discovered: %s", mac)
                 self.plugs.add(mac)
-                self._entry.runtime_data.devices.subscribe(mac)
+                self._devices.subscribe(mac)
                 async_dispatcher_send(self._hass, CREATE_PLUG_SIGNAL, mac)
             else:
                 # MAC already known — the library removed the device and is
@@ -175,7 +179,7 @@ class PowersensorMessageDispatcher:
                 _LOGGER.debug(
                     "Plug re-discovered after expiry, re-subscribing: %s", mac
                 )
-                self._entry.runtime_data.devices.subscribe(mac)
+                self._devices.subscribe(mac)
 
         elif device_type == "sensor":
             if mac not in self.sensors:
@@ -186,14 +190,14 @@ class PowersensorMessageDispatcher:
                 role = _filter_unknown(self._entry.data.get(CFG_ROLES, {}).get(mac))
                 _LOGGER.debug("New sensor discovered: %s role=%s", mac, role)
                 self.sensors[mac] = role
-                self._entry.runtime_data.devices.subscribe(mac)
+                self._devices.subscribe(mac)
                 async_dispatcher_send(self._hass, CREATE_SENSOR_SIGNAL, mac, role)
             else:
                 # MAC already known — re-subscribe after expiry (same as plug case).
                 _LOGGER.debug(
                     "Sensor re-discovered after expiry, re-subscribing: %s", mac
                 )
-                self._entry.runtime_data.devices.subscribe(mac)
+                self._devices.subscribe(mac)
 
     def _handle_now_relaying_for(self, event: dict[str, Any]) -> None:
         """Handle the forwarded now_relaying_for event as a role hint.
@@ -308,6 +312,6 @@ class PowersensorMessageDispatcher:
     async def disconnect(self) -> None:
         """Clean up device subscriptions."""
         for mac in self.plugs:
-            self._entry.runtime_data.devices.unsubscribe(mac)
+            self._devices.unsubscribe(mac)
         for mac in self.sensors:
-            self._entry.runtime_data.devices.unsubscribe(mac)
+            self._devices.unsubscribe(mac)
