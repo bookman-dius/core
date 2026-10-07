@@ -10,10 +10,8 @@ themselves stay thin — each class simply reads ``entity_description`` fields
 rather than containing dispatch logic.
 """
 
-from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 import logging
 from typing import Any, override
 
@@ -44,7 +42,6 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
 )
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.event import async_call_later
 
 from .const import (
     CFG_ROLES,
@@ -59,6 +56,7 @@ from .const import (
     ROLE_WATER,
     UPDATE_VHH_SIGNAL,
 )
+from .entity import PowersensorEntity
 from .models import (
     PowersensorConfigEntry,
     PowersensorRuntimeData,
@@ -585,11 +583,8 @@ async def async_setup_entry(
     update_virtual_household_entities()
 
 
-class PowersensorEntity(SensorEntity):
-    """Base class for all Powersensor sensor entities."""
-
-    _attr_has_entity_name = True
-    _attr_should_poll = False
+class PowersensorMeasurementEntity(PowersensorEntity, SensorEntity):
+    """Sensor entity reporting one measurement from a Powersensor plug or sensor."""
 
     def __init__(
         self,
@@ -600,72 +595,21 @@ class PowersensorEntity(SensorEntity):
         timeout_seconds: int = 60,
     ) -> None:
         """Initialize the entity."""
-        self._role: str | None = role
+        super().__init__(
+            config_entry_id,
+            mac,
+            role,
+            f"{DATA_UPDATE_SIGNAL_PREFIX}{mac}_{description.event}",
+            timeout_seconds,
+        )
         self._unrecognised_role: str | None = None
-        self._has_recently_received_update_message = False
         self._attr_native_value = None
-        self._config_entry_id = config_entry_id
-        self._mac = mac
-        self._remove_unavailability_tracker: Callable[[], None] | None = None
-        self._timeout = timedelta(seconds=timeout_seconds)
-
         self.entity_description: PowersensorSensorEntityDescription = description
         self._attr_unique_id = f"{mac}_{description.key}"
-        self._signal = f"{DATA_UPDATE_SIGNAL_PREFIX}{mac}_{description.event}"
-
-    @property
-    @abstractmethod
-    @override
-    def device_info(self) -> DeviceInfo:
-        """Return device info. Subclasses must implement."""
-
-    @property
-    @override
-    def available(self) -> bool:
-        """Return True when at least one update has been received recently."""
-        return self._has_recently_received_update_message
-
-    def _schedule_unavailable(self) -> None:
-        """(Re-)schedule the unavailability timer."""
-        if self._remove_unavailability_tracker:
-            self._remove_unavailability_tracker()
-        self._remove_unavailability_tracker = async_call_later(
-            self.hass,
-            self._timeout.total_seconds(),
-            self._async_make_unavailable,
-        )
-
-    @callback
-    def _async_make_unavailable(self, _now: datetime) -> None:
-        """Mark entity as unavailable when the timeout fires."""
-        self._has_recently_received_update_message = False
-        self.async_write_ha_state()
-
-    def _cancel_unavailability_tracker(self) -> None:
-        """Cancel the unavailability timer if one is scheduled."""
-        if self._remove_unavailability_tracker:
-            self._remove_unavailability_tracker()
-            self._remove_unavailability_tracker = None
 
     @override
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to the data-update signal and register the unavailability timer.
-
-        Subclasses that need additional subscriptions (e.g. ROLE_UPDATE_SIGNAL)
-        should call ``await super().async_added_to_hass()`` first and then add
-        their own ``async_on_remove`` registrations.
-        """
-        self._has_recently_received_update_message = False
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, self._signal, self._handle_update)
-        )
-        self.async_on_remove(self._cancel_unavailability_tracker)
-
-    @callback
-    def _handle_update(self, event: str | None, message: dict[str, Any]) -> None:
-        """Handle a pushed data update from the dispatcher."""
-        self._has_recently_received_update_message = True
-
+    def _update_from_message(self, message: dict[str, Any]) -> None:
+        """Set the native value from the description's key in the message."""
         desc = self.entity_description
         if desc.message_key in message:
             raw = message[desc.message_key]
@@ -695,11 +639,8 @@ class PowersensorEntity(SensorEntity):
             else:
                 self._attr_native_value = raw
 
-        self._schedule_unavailable()
-        self.async_write_ha_state()
 
-
-class PowersensorSensorEntity(PowersensorEntity):
+class PowersensorSensorEntity(PowersensorMeasurementEntity):
     """Entity representing a single measurement from a Powersensor electricity/water sensor."""
 
     @property
@@ -719,7 +660,7 @@ class PowersensorSensorEntity(PowersensorEntity):
         )
 
 
-class PowersensorPlugEntity(PowersensorEntity):
+class PowersensorPlugEntity(PowersensorMeasurementEntity):
     """Entity representing a single measurement from a Powersensor smart plug."""
 
     @property
