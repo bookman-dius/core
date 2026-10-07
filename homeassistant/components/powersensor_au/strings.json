@@ -33,71 +33,71 @@
   },
   "device": {
     "appliance_sensor": {
-      "name": "Powersensor Appliance Sensor ({id})"
+      "name": "Appliance sensor ({id})"
     },
     "mains_sensor": {
-      "name": "Powersensor Mains Sensor ({id})"
+      "name": "Mains sensor ({id})"
     },
     "plug": {
-      "name": "Powersensor Plug ({id})"
+      "name": "Plug ({id})"
     },
     "solar_sensor": {
-      "name": "Powersensor Solar Sensor ({id})"
+      "name": "Solar sensor ({id})"
     },
     "unknown_sensor": {
-      "name": "Powersensor Sensor ({id})"
+      "name": "Sensor ({id})"
     },
     "virtual_household_view": {
-      "name": "Powersensor Household View"
+      "name": "Household view"
     },
     "water_sensor": {
-      "name": "Powersensor Water Sensor ({id})"
+      "name": "Water sensor ({id})"
     }
   },
   "entity": {
     "sensor": {
       "active_current": {
-        "name": "Active Current"
+        "name": "Active current"
       },
       "apparent_current": {
-        "name": "Apparent Current"
+        "name": "Apparent current"
       },
       "device_role": {
-        "name": "Device Role",
+        "name": "Device role",
         "state": {
           "appliance": "Appliance",
-          "house_net": "Mains / House Net",
+          "house_net": "Mains / house net",
           "solar": "Solar",
           "unknown": "Unknown",
           "water": "Water"
         }
       },
       "energy_from_grid": {
-        "name": "Energy - From grid"
+        "name": "Energy - from grid"
       },
       "energy_home_use": {
-        "name": "Energy - Home usage"
+        "name": "Energy - home usage"
       },
       "energy_solar_generation": {
-        "name": "Energy - Solar generation"
+        "name": "Energy - solar generation"
       },
       "energy_to_grid": {
-        "name": "Energy - To grid"
+        "name": "Energy - to grid"
       },
       "power_from_grid": {
-        "name": "Power - From grid"
+        "name": "Power - from grid"
       },
       "power_home_use": {
-        "name": "Power - Home use"
+        "name": "Power - home use"
       },
       "power_solar_generation": {
-        "name": "Power - Solar generation"
+        "name": "Power - solar generation"
       },
       "power_to_grid": {
-        "name": "Power - To grid"
+        "name": "Power - to grid"
       },
       "reactive_current": {
-        "name": "Reactive Current"
+        "name": "Reactive current"
       },
       "rssi_ble": {
         "name": "Signal strength (Bluetooth)"
@@ -108,7 +108,7 @@
     "sensor_role": {
       "options": {
         "appliance": "Appliance",
-        "house-net": "Mains / House Net",
+        "house-net": "Mains / house net",
         "solar": "Solar",
         "unknown": "Not yet assigned",
         "water": "Water"

@@ -857,7 +857,7 @@ async def test_role_change_writes_device_registry_once(
         (DOMAIN, SENSOR_MAC), config_entry.entry_id
     )
     assert device is not None
-    assert device.name == f"Powersensor Solar Sensor ({SENSOR_MAC})"
+    assert device.name == f"Solar sensor ({SENSOR_MAC})"
 
 
 async def test_unrecognised_role_is_shown_as_unknown(

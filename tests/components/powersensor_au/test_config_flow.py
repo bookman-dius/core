@@ -279,13 +279,13 @@ async def test_reconfigure_persists_every_sensor_role_and_reloads(
         pytest.param(
             MAINS_MAC,
             ROLE_HOUSENET,
-            f"Powersensor Mains Sensor ({MAINS_MAC})",
+            f"Mains sensor ({MAINS_MAC})",
             id="persisted_role",
         ),
         pytest.param(
             UNKNOWN_MAC,
             ROLE_UNKNOWN,
-            f"Powersensor Sensor ({UNKNOWN_MAC})",
+            f"Sensor ({UNKNOWN_MAC})",
             id="no_role",
         ),
     ],
