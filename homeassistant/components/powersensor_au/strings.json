@@ -1,14 +1,9 @@
 {
   "config": {
     "abort": {
-      "already_in_progress": "Configuration is already in progress.",
+      "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
       "entry_not_loaded": "The Powersensor integration must be loaded before sensor roles can be reconfigured.",
-      "firmware_not_compatible": "Plug firmware not compatible",
-      "no_sensors_found": "No Powersensor sensors have been discovered yet. Sensor roles can be set once a sensor reports to a plug.",
-      "single_instance_allowed": "Already configured. Only a single configuration possible."
-    },
-    "error": {
-      "unknown": "Unexpected error"
+      "no_sensors_found": "No Powersensor sensors have been discovered yet. Sensor roles can be set once a sensor reports to a plug."
     },
     "step": {
       "discovery_confirm": {

@@ -1,5 +1,6 @@
 """Config flow for the Powersensor integration."""
 
+import logging
 from typing import Any, override
 
 import voluptuous as vol
@@ -24,6 +25,8 @@ from .const import (
     ROLE_WATER,
 )
 from .models import PowersensorConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
 
 CONF_ROLE = "role"
 DOCS_URL = (
@@ -149,6 +152,12 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         properties = discovery_info.properties or {}
         if "id" not in properties:
+            # Aborting the first step of a discovery flow shows nothing to the
+            # user, so log why the plug was skipped.
+            _LOGGER.debug(
+                "Ignoring %s: no id in its zeroconf properties, firmware not compatible",
+                discovery_info.name,
+            )
             return self.async_abort(reason="firmware_not_compatible")
 
         if result := await self._async_prepare_setup():
