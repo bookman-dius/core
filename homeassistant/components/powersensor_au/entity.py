@@ -25,7 +25,6 @@ class PowersensorEntity(Entity):
 
     def __init__(
         self,
-        config_entry_id: str,
         mac: str,
         role: str | None,
         signal: str,
@@ -34,7 +33,6 @@ class PowersensorEntity(Entity):
         """Initialize the entity."""
         self._role: str | None = role
         self._has_recently_received_update_message = False
-        self._config_entry_id = config_entry_id
         self._mac = mac
         self._remove_unavailability_tracker: Callable[[], None] | None = None
         self._timeout = timedelta(seconds=timeout_seconds)

@@ -458,7 +458,7 @@ async def async_setup_entry(
         # (e.g. power/energy when a sensor is assigned ROLE_HOUSENET/ROLE_SOLAR,
         # or flow/volume when assigned ROLE_WATER).
         new_entities = [
-            PowersensorSensorEntity(entry_id, mac_address, new_role, desc)
+            PowersensorSensorEntity(mac_address, new_role, desc)
             for desc in SENSOR_DESCRIPTIONS
             if desc.supported_roles is not None
             and new_role in desc.supported_roles
@@ -484,7 +484,7 @@ async def async_setup_entry(
     def handle_discovered_sensor(sensor_mac: str, sensor_role: str | None) -> None:
         """Create entities for a newly discovered sensor."""
         new_sensors = [
-            PowersensorSensorEntity(entry_id, sensor_mac, sensor_role, desc)
+            PowersensorSensorEntity(sensor_mac, sensor_role, desc)
             for desc in SENSOR_DESCRIPTIONS
             if desc.supported_roles is None or sensor_role in desc.supported_roles
         ]
@@ -511,7 +511,7 @@ async def async_setup_entry(
         _LOGGER.debug("Plug discovered: %s", plug_mac)
         async_add_entities(
             [
-                PowersensorPlugEntity(entry_id, plug_mac, ROLE_APPLIANCE, desc)
+                PowersensorPlugEntity(plug_mac, ROLE_APPLIANCE, desc)
                 for desc in PLUG_DESCRIPTIONS
             ],
             False,
@@ -588,7 +588,6 @@ class PowersensorMeasurementEntity(PowersensorEntity, SensorEntity):
 
     def __init__(
         self,
-        config_entry_id: str,
         mac: str,
         role: str | None,
         description: PowersensorSensorEntityDescription,
@@ -596,7 +595,6 @@ class PowersensorMeasurementEntity(PowersensorEntity, SensorEntity):
     ) -> None:
         """Initialize the entity."""
         super().__init__(
-            config_entry_id,
             mac,
             role,
             f"{DATA_UPDATE_SIGNAL_PREFIX}{mac}_{description.event}",
