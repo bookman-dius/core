@@ -378,7 +378,7 @@
       'last_changed': <ANY>,
       'last_reported': <ANY>,
       'last_updated': <ANY>,
-      'state': '100',
+      'state': '100.0',
     }),
     '112233445566_device_role': StateSnapshot({
       'attributes': ReadOnlyDict({
@@ -418,7 +418,7 @@
         <EntityStateAttribute.DEVICE_CLASS: 'device_class'>: 'signal_strength',
         <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Mains sensor (112233445566) Signal strength (Bluetooth)',
         <SensorEntityCapabilityAttribute.STATE_CLASS: 'state_class'>: <SensorStateClass.MEASUREMENT: 'measurement'>,
-        <EntityStateAttribute.UNIT_OF_MEASUREMENT: 'unit_of_measurement'>: 'dB',
+        <EntityStateAttribute.UNIT_OF_MEASUREMENT: 'unit_of_measurement'>: 'dBm',
       }),
       'context': <ANY>,
       'entity_id': 'sensor.sensor_112233445566_signal_strength_bluetooth',
@@ -622,7 +622,7 @@
       'supported_features': 0,
       'translation_key': 'rssi_ble',
       'unique_id': '112233445566_rssi_ble',
-      'unit_of_measurement': 'dB',
+      'unit_of_measurement': 'dBm',
     }),
   ])
 # ---

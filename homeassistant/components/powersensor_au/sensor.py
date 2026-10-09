@@ -25,7 +25,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     PERCENTAGE,
-    SIGNAL_STRENGTH_DECIBELS,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
@@ -36,7 +36,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -68,8 +68,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _volts_to_battery_pct(volts: float) -> float:
-    """Convert a battery voltage reading to a percentage (3.3 V = 0 %, 4.15 V = 100 %)."""
-    return max(min(100.0 * (volts - 3.3) / 0.85, 100), 0)
+    """Convert a battery voltage reading to a percentage (3.3 V = 0 %, 4.15 V = 100 %).
+
+    A linear approximation is deliberate.  powersensor-local reports the raw
+    voltage and documents that any percentage mapping is inaccurate, because
+    battery curves vary between individual cells and with conditions.  For a
+    simple percentage display it recommends exactly this linear extrapolation
+    across the middle of the curve, 3.3 V to 4.15 V: "not entirely accurate,
+    but it's also not useless" (see the "volts" field in its xlatemsg module).
+    """
+    return max(min(100.0 * (volts - 3.3) / 0.85, 100.0), 0.0)
 
 
 def _joules_to_kwh(joules: float) -> float:
@@ -178,7 +186,7 @@ SENSOR_DESCRIPTIONS: tuple[PowersensorSensorEntityDescription, ...] = (
         translation_key="rssi_ble",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         event="radio_signal_quality",
@@ -425,7 +433,7 @@ async def async_setup_entry(
         recorded.  A sensor that has genuinely been re-purposed therefore needs
         its stale entities deleted by hand.
         """
-        existing_roles: dict[str, str | None] = dict(entry.data.get(CFG_ROLES, {}))
+        existing_roles: dict[str, str | None] = dict(entry.data[CFG_ROLES])
         old_role = existing_roles.get(mac_address)
 
         if old_role == new_role:
@@ -473,7 +481,7 @@ async def async_setup_entry(
             )
             for e in new_entities:
                 role_entities_added.add((mac_address, e.entity_description.key))
-            async_add_entities(new_entities, False)
+            async_add_entities(new_entities)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, ROLE_UPDATE_SIGNAL, handle_role_update)
@@ -495,7 +503,7 @@ async def async_setup_entry(
             if e.entity_description.supported_roles is not None:
                 role_entities_added.add((sensor_mac, e.entity_description.key))
 
-        async_add_entities(new_sensors, False)
+        async_add_entities(new_sensors)
 
         if sensor_role in (ROLE_HOUSENET, ROLE_SOLAR):
             async_dispatcher_send(hass, UPDATE_VHH_SIGNAL)
@@ -514,7 +522,6 @@ async def async_setup_entry(
                 PowersensorPlugEntity(plug_mac, ROLE_APPLIANCE, desc)
                 for desc in PLUG_DESCRIPTIONS
             ],
-            False,
         )
 
     entry.async_on_unload(
@@ -550,7 +557,6 @@ async def async_setup_entry(
                     PowersensorHouseholdEntity(vhh, desc)
                     for desc in CONSUMPTION_DESCRIPTIONS
                 ],
-                False,
             )
             vhh_state.mains_added = True
 
@@ -561,7 +567,6 @@ async def async_setup_entry(
                     PowersensorHouseholdEntity(vhh, desc)
                     for desc in PRODUCTION_DESCRIPTIONS
                 ],
-                False,
             )
             vhh_state.solar_added = True
 
@@ -591,14 +596,12 @@ class PowersensorMeasurementEntity(PowersensorEntity, SensorEntity):
         mac: str,
         role: str | None,
         description: PowersensorSensorEntityDescription,
-        timeout_seconds: int = 60,
     ) -> None:
         """Initialize the entity."""
         super().__init__(
             mac,
             role,
             f"{DATA_UPDATE_SIGNAL_PREFIX}{mac}_{description.event}",
-            timeout_seconds,
         )
         self._unrecognised_role: str | None = None
         self._attr_native_value = None
@@ -703,6 +706,7 @@ class PowersensorHouseholdEntity(SensorEntity):
         """Return device info for the virtual household device."""
         return DeviceInfo(
             identifiers={(DOMAIN, "vhh")},
+            entry_type=DeviceEntryType.SERVICE,
             manufacturer="Powersensor",
             model="Virtual",
             translation_key="virtual_household_view",

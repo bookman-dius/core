@@ -187,7 +187,7 @@ class PowersensorMessageDispatcher:
                 # via now_relaying_for which fires immediately after.  Fall back
                 # to the persisted role so role-gated entities are created on
                 # reload without waiting for the wire.
-                role = _filter_unknown(self._entry.data.get(CFG_ROLES, {}).get(mac))
+                role = _filter_unknown(self._entry.data[CFG_ROLES].get(mac))
                 _LOGGER.debug("New sensor discovered: %s role=%s", mac, role)
                 self.sensors[mac] = role
                 self._devices.subscribe(mac)
@@ -268,7 +268,7 @@ class PowersensorMessageDispatcher:
             return
 
         role = _filter_unknown(message.get("role"))
-        persisted_role = _filter_unknown(self._entry.data.get(CFG_ROLES, {}).get(mac))
+        persisted_role = _filter_unknown(self._entry.data[CFG_ROLES].get(mac))
 
         # Compute the effective role without mutating the library's dict.
         # When the device reports no role (or ROLE_UNKNOWN), fall back to the

@@ -150,8 +150,7 @@ class PowersensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         plug discovery and connection management is handled by the
         powersensor_local library.
         """
-        properties = discovery_info.properties or {}
-        if "id" not in properties:
+        if "id" not in discovery_info.properties:
             # Aborting the first step of a discovery flow shows nothing to the
             # user, so log why the plug was skipped.
             _LOGGER.debug(

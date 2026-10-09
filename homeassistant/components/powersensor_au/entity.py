@@ -11,6 +11,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
+# Mark an entity unavailable when no update has arrived for this long.
+UPDATE_TIMEOUT = timedelta(seconds=60)
+
 
 class PowersensorEntity(Entity):
     """Base class for entities fed by a Powersensor device's data signal.
@@ -28,14 +31,12 @@ class PowersensorEntity(Entity):
         mac: str,
         role: str | None,
         signal: str,
-        timeout_seconds: int = 60,
     ) -> None:
         """Initialize the entity."""
         self._role: str | None = role
         self._has_recently_received_update_message = False
         self._mac = mac
         self._remove_unavailability_tracker: Callable[[], None] | None = None
-        self._timeout = timedelta(seconds=timeout_seconds)
         self._signal = signal
 
     @property
@@ -56,7 +57,7 @@ class PowersensorEntity(Entity):
             self._remove_unavailability_tracker()
         self._remove_unavailability_tracker = async_call_later(
             self.hass,
-            self._timeout.total_seconds(),
+            UPDATE_TIMEOUT,
             self._async_make_unavailable,
         )
 
